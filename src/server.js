@@ -40,15 +40,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ─── Static Files (serves index.html from same directory as server.js) ───────
 const path = require('path');
 app.use(express.static(path.join(__dirname)));
-
-/** Dashboard route */
 app.get('/dashboard', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
-
 // ─── In-Memory Store ─────────────────────────────────────────────────────────
 /**
  * users: { [username]: { username, taskName, totalTime, lastSeen, socketIds[] } }
