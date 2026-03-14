@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🏆 Productivity Leaderboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --c-bg:       #07080f;
+      --c-surface:  rgba(255,255,255,0.04);
+      --c-border:   rgba(255,255,255,0.08);
+      --c-text:     #e8eaf6;
+      --c-muted:    rgba(232,234,246,0.4);
+      --c-accent:   #7c6dfa;
+      --c-accent2:  #a78bfa;
+      --c-gold:     #fbbf24;
+      --c-silver:   #94a3b8;
+      --c-bronze:   #cd7c4a;
+
+      --rank1: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      --rank2: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+      --rank3: linear-gradient(135deg, #cd7c4a 0%, #92400e 100%);
+
+      --font-display: 'Syne', sans-serif;
+      --font-mono:    'DM Mono', monospace;
+
+      --glow-accent: 0 0 40px rgba(124,109,250,0.25);
+      --glow-gold:   0 0 20px rgba(251,191,36,0.4);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-family: var(--font-display);
+      overflow-x: hidden;
+    }
+
+    /* ─── Animated Background ──────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% -10%, rgba(124,109,250,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 110%, rgba(167,139,250,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(30,27,75,0.5) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Floating orbs */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px;
+      top: -200px; right: -200px;
+      background: radial-gradient(circle, rgba(124,109,250,0.1) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: floatOrb 12s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes floatOrb {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(-40px, 40px) scale(1.1); }
+    }
+
+    /* ─── Layout ───────────────────────────────────────────── */
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+    }
+
+    /* ─── Header ───────────────────────────────────────────── */
+    header {
+      padding: 48px 0 36px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--c-border);
+    }
+
+    .header-left {}
+
+    .trophy-icon {
+      font-size: 36px;
+      display: block;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 0 12px rgba(251,191,36,0.6));
+      animation: trophyPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes trophyPulse {
+      0%,100% { filter: drop-shadow(0 0 12px rgba(251,191,36,0.6)); }
+      50%      { filter: drop-shadow(0 0 24px rgba(251,191,36,0.9)); }
+    }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      background: linear-gradient(135deg, #e8eaf6 0%, var(--c-accent2) 60%, var(--c-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--c-muted);
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .status-dot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--c-muted);
+      font-family: var(--font-mono);
+    }
+
+    .status-dot .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .status-dot.offline .dot {
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    .last-updated {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--c-muted);
+    }
+
+    /* ─── Stats Bar ────────────────────────────────────────── */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      padding: 24px 0;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      flex: 1;
+      min-width: 140px;
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 16px;
+      padding: 20px 24px;
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--glow-accent);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--c-muted);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--c-text), var(--c-accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Leaderboard Table ────────────────────────────────── */
+    .board-header {
+      display: grid;
+      grid-template-columns: 60px 1fr 200px 160px 100px;
+      gap: 16px;
+      padding: 0 20px 12px;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--c-muted);
+      border-bottom: 1px solid var(--c-border);
+      margin-bottom: 8px;
+    }
+
+    .board-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ─── User Card ────────────────────────────────────────── */
+    .user-card {
+      display: grid;
+      grid-template-columns: 60px 1fr 200px 160px 100px;
+      gap: 16px;
+      align-items: center;
+      padding: 18px 20px;
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      animation: slideIn 0.4s ease both;
+      cursor: default;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .user-card:hover {
+      transform: translateY(-2px) scale(1.005);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    /* Top 3 special styling */
+    .user-card.rank-1 {
+      border-color: rgba(251,191,36,0.3);
+      background: linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(245,158,11,0.03) 100%);
+      box-shadow: 0 0 40px rgba(251,191,36,0.08);
+    }
+
+    .user-card.rank-1:hover {
+      box-shadow: 0 8px 40px rgba(251,191,36,0.2);
+    }
+
+    .user-card.rank-2 {
+      border-color: rgba(148,163,184,0.25);
+      background: linear-gradient(135deg, rgba(148,163,184,0.06) 0%, rgba(100,116,139,0.03) 100%);
+    }
+
+    .user-card.rank-3 {
+      border-color: rgba(205,124,74,0.25);
+      background: linear-gradient(135deg, rgba(205,124,74,0.06) 0%, rgba(146,64,14,0.03) 100%);
+    }
+
+    /* ─── Rank Number ──────────────────────────────────────── */
+    .rank-num {
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .rank-1 .rank-num { background: var(--rank1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .rank-2 .rank-num { background: var(--rank2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .rank-3 .rank-num { background: var(--rank3); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+    /* ─── User Info ────────────────────────────────────────── */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      flex-shrink: 0;
+      border: 2px solid var(--c-border);
+      background: linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent2) 100%);
+    }
+
+    .rank-1 .avatar { border-color: var(--c-gold); box-shadow: var(--glow-gold); }
+    .rank-2 .avatar { border-color: var(--c-silver); }
+    .rank-3 .avatar { border-color: var(--c-bronze); }
+
+    .user-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ─── Task Name ────────────────────────────────────────── */
+    .task-name {
+      font-size: 13px;
+      color: var(--c-muted);
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-name::before {
+      content: '→ ';
+      color: var(--c-accent);
+    }
+
+    /* ─── Time Display ─────────────────────────────────────── */
+    .time-display {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--c-text);
+      letter-spacing: 0.02em;
+    }
+
+    /* ─── Rank Badge ───────────────────────────────────────── */
+    .rank-badge {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--c-border);
+      white-space: nowrap;
+      text-align: center;
+      letter-spacing: 0.01em;
+    }
+
+    .badge-diamond { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.1); color: #a5b4fc; }
+    .badge-master  { border-color: rgba(239,68,68,0.4);  background: rgba(239,68,68,0.1);  color: #fca5a5; }
+    .badge-legend  { border-color: rgba(251,191,36,0.5); background: rgba(251,191,36,0.1); color: var(--c-gold); }
+    .badge-gold    { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+    .badge-silver  { border-color: rgba(148,163,184,0.4); background: rgba(148,163,184,0.08); }
+    .badge-bronze  { border-color: rgba(205,124,74,0.4);  background: rgba(205,124,74,0.08); }
+
+    /* ─── Empty State ──────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 80px 40px;
+      color: var(--c-muted);
+    }
+
+    .empty-state .icon { font-size: 56px; display: block; margin-bottom: 20px; opacity: 0.5; }
+    .empty-state p { font-size: 16px; }
+
+    /* ─── Progress Bar ─────────────────────────────────────── */
+    .rank-progress {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--c-border);
+      border-radius: 0 0 16px 16px;
+      overflow: hidden;
+    }
+
+    .rank-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--c-accent), var(--c-accent2));
+      border-radius: 2px;
+      transition: width 1s ease;
+    }
+
+    .user-card { position: relative; }
+
+    /* ─── Footer ───────────────────────────────────────────── */
+    footer {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--c-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--c-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* ─── Responsive ───────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .board-header { display: none; }
+
+      .user-card {
+        grid-template-columns: 48px 1fr auto;
+        grid-template-rows: auto auto;
+      }
+
+      .task-name   { grid-column: 2; grid-row: 2; }
+      .time-display { grid-column: 3; grid-row: 1; }
+      .rank-badge  { display: none; }
+    }
+
+    /* ─── Toast ────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--c-accent);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 40px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 32px rgba(124,109,250,0.4);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 9999;
+      white-space: nowrap;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── Rank legend ──────────────────────────────────────── */
+    .rank-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0 24px;
+    }
+
+    .legend-pill {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--c-border);
+      color: var(--c-muted);
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─── Header ─────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <span class="trophy-icon">🏆</span>
+      <h1>Productivity Leaderboard</h1>
+      <p class="subtitle">Live team focus tracker</p>
+    </div>
+    <div class="header-right">
+      <div class="status-dot" id="statusDot">
+        <div class="dot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
+      <div class="last-updated" id="lastUpdated">—</div>
+    </div>
+  </header>
+
+  <!-- ─── Stats Bar ───────────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Active Users</div>
+      <div class="stat-value" id="statUsers">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Top Focus Time</div>
+      <div class="stat-value" id="statTopTime">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Team Hours</div>
+      <div class="stat-value" id="statTeamHours">0h</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Live Updates</div>
+      <div class="stat-value" id="statUpdates">0</div>
+    </div>
+  </div>
+
+  <!-- ─── Rank Legend ─────────────────────────────────────── -->
+  <div class="rank-legend">
+    <span class="legend-pill">⭐ Starter 1h+</span>
+    <span class="legend-pill">🥉 Bronze 3h+</span>
+    <span class="legend-pill">🥈 Silver 5h+</span>
+    <span class="legend-pill">🥇 Gold 7h+</span>
+    <span class="legend-pill">🥇 Gold+ 9h+</span>
+    <span class="legend-pill">💎 Diamond 10h+</span>
+    <span class="legend-pill">🔥 Master 12h+</span>
+    <span class="legend-pill">👑 Legend 15h+</span>
+  </div>
+
+  <!-- ─── Board Header ────────────────────────────────────── -->
+  <div class="board-header">
+    <span>#</span>
+    <span>User</span>
+    <span>Current Task</span>
+    <span>Total Time</span>
+    <span>Rank</span>
+  </div>
+
+  <!-- ─── Leaderboard List ────────────────────────────────── -->
+  <div class="board-list" id="boardList">
+    <div class="empty-state">
+      <span class="icon">⏳</span>
+      <p>Waiting for users to connect…</p>
+    </div>
+  </div>
+
+  <!-- ─── Footer ─────────────────────────────────────────── -->
+  <footer>
+    <span>Powered by Super Productivity + Socket.IO</span>
+    <span id="footerTime">—</span>
+  </footer>
+
+</div>
+
+<!-- ─── Toast Notification ─────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Configuration ──────────────────────────────────────────
+const SERVER_URL = 'http://localhost:3000';
+
+// ─── Rank System ────────────────────────────────────────────
+const RANKS = [
+  { hours: 15, label: '👑 Legend',   cls: 'badge-legend'  },
+  { hours: 12, label: '🔥 Master',   cls: 'badge-master'  },
+  { hours: 10, label: '💎 Diamond',  cls: 'badge-diamond' },
+  { hours:  9, label: '🥇 Gold+',    cls: 'badge-gold'    },
+  { hours:  7, label: '🥇 Gold',     cls: 'badge-gold'    },
+  { hours:  5, label: '🥈 Silver',   cls: 'badge-silver'  },
+  { hours:  3, label: '🥉 Bronze',   cls: 'badge-bronze'  },
+  { hours:  1, label: '⭐ Starter',  cls: ''              },
+  { hours:  0, label: '— Rookie',    cls: ''              },
+];
+
+function getRank(totalTimeMs) {
+  const hours = totalTimeMs / 3_600_000;
+  return RANKS.find(r => hours >= r.hours) || RANKS[RANKS.length - 1];
+}
+
+// Next rank threshold in ms (for progress bar)
+function getNextRankThreshold(totalTimeMs) {
+  const hours = totalTimeMs / 3_600_000;
+  const idx = RANKS.findIndex(r => hours >= r.hours);
+  if (idx <= 0) return { current: 0, next: 3_600_000, progress: hours / 1 * 100 };
+  const currentH = RANKS[idx].hours;
+  const prevH = idx > 0 ? RANKS[idx - 1].hours : currentH + 3;
+  const progress = Math.min(100, ((hours - currentH) / (prevH - currentH)) * 100);
+  return { current: currentH, next: prevH, progress };
+}
+
+// ─── Time Formatting ────────────────────────────────────────
+function formatTime(ms) {
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  const s = Math.floor((ms % 60_000) / 1_000);
+  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+  if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+
+function formatHours(ms) {
+  return (ms / 3_600_000).toFixed(1) + 'h';
+}
+
+// ─── Avatar initials ─────────────────────────────────────────
+function getInitials(name) {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+// ─── Toast ───────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── Confetti ────────────────────────────────────────────────
+function fireConfetti() {
+  confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+}
+
+// ─── State ───────────────────────────────────────────────────
+let leaderboard = [];
+let updateCount = 0;
+const prevRanks = {}; // track previous rank badges for rank-up detection
+
+// ─── Render ──────────────────────────────────────────────────
+function render(data) {
+  leaderboard = data;
+  const list = document.getElementById('boardList');
+
+  if (!data || data.length === 0) {
+    list.innerHTML = `<div class="empty-state"><span class="icon">⏳</span><p>Waiting for users to connect…</p></div>`;
+    return;
+  }
+
+  // Update stats
+  document.getElementById('statUsers').textContent = data.length;
+  document.getElementById('statTopTime').textContent = data[0] ? formatHours(data[0].totalTime) : '—';
+  const teamMs = data.reduce((s, u) => s + u.totalTime, 0);
+  document.getElementById('statTeamHours').textContent = formatHours(teamMs);
+
+  // Build cards
+  const html = data.map((user, i) => {
+    const rank = getRank(user.totalTime);
+    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+    const rankNum = i < 3 ? ['🥇','🥈','🥉'][i] : `#${i + 1}`;
+    const { progress } = getNextRankThreshold(user.totalTime);
+    const initials = getInitials(user.username);
+
+    // Detect rank-up
+    const prevBadge = prevRanks[user.username];
+    if (prevBadge && prevBadge !== rank.label) {
+      showToast(`🎉 ${user.username} reached ${rank.label}!`);
+      fireConfetti();
+    }
+    prevRanks[user.username] = rank.label;
+
+    return `
+      <div class="user-card ${rankClass}" data-username="${user.username}">
+        <div class="rank-num">${rankNum}</div>
+        <div class="user-info">
+          <div class="avatar">${initials}</div>
+          <div class="user-name">${escapeHtml(user.username)}</div>
+        </div>
+        <div class="task-name">${escapeHtml(user.taskName || 'No active task')}</div>
+        <div class="time-display"
+             data-base-time="${user.totalTime}"
+             data-last-update="${Date.now()}">
+          ${formatTime(user.totalTime)}
+        </div>
+        <div class="rank-badge ${rank.cls}">${rank.label}</div>
+        <div class="rank-progress">
+          <div class="rank-progress-fill" style="width:${progress}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.innerHTML = html;
+  updateCount++;
+  document.getElementById('statUpdates').textContent = updateCount;
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ─── Live Ticking Timer ──────────────────────────────────────
+// Increments every second so timers feel live even between server updates
+setInterval(() => {
+  document.querySelectorAll('[data-base-time]').forEach(el => {
+    const base = parseInt(el.dataset.baseTime, 10);
+    const lastUpdate = parseInt(el.dataset.lastUpdate, 10);
+    const elapsed = Date.now() - lastUpdate;
+    el.textContent = formatTime(base + elapsed);
+  });
+}, 1000);
+
+// ─── Footer clock ────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('footerTime').textContent = new Date().toLocaleString();
+}, 1000);
+
+// ─── Socket.IO Connection ────────────────────────────────────
+const socket = io(SERVER_URL, {
+  reconnectionDelay: 1000,
+  reconnectionAttempts: Infinity,
+});
+
+socket.on('connect', () => {
+  console.log('[Dashboard] Connected to server.');
+  const dot = document.getElementById('statusDot');
+  dot.classList.remove('offline');
+  document.getElementById('statusText').textContent = 'Live';
+});
+
+socket.on('disconnect', () => {
+  console.warn('[Dashboard] Disconnected from server.');
+  const dot = document.getElementById('statusDot');
+  dot.classList.add('offline');
+  document.getElementById('statusText').textContent = 'Reconnecting…';
+});
+
+socket.on('leaderboard', (data) => {
+  render(data);
+});
+
+// Heartbeat to keep server presence
+setInterval(() => {
+  socket.emit('heartbeat', { source: 'dashboard' });
+}, 25_000);
+
+// ─── Initial HTTP fetch as fallback ──────────────────────────
+fetch(`${SERVER_URL}/leaderboard`)
+  .then(r => r.json())
+  .then(data => { if (data.length > 0) render(data); })
+  .catch(() => {}); // socket will deliver data anyway
+</script>
+</body>
+</html>
