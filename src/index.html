@@ -652,7 +652,7 @@ function render(data) {
     prevRanks[user.username] = rank.label;
 
     return `
-      <div class="user-card ${rankClass}" data-username="${user.username}">
+      <div class="user-card ${rankClass}" data-username="${user.username}" data-is-active="${user.isActive}">
         <div class="rank-num">${rankNum}</div>
         <div class="user-info">
           <div class="avatar">${initials}</div>
@@ -690,7 +690,7 @@ setInterval(() => {
     const base = parseInt(el.dataset.baseTime, 10);
     const lastUpdate = parseInt(el.dataset.lastUpdate, 10);
     const elapsed = Date.now() - lastUpdate;
-    el.textContent = formatTime(base + elapsed);
+    const card = el.closest("[data-is-active]"); const active = card && card.dataset.isActive === "true"; el.textContent = formatTime(active ? base + elapsed : base);
   });
 }, 1000);
 

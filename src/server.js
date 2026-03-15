@@ -118,6 +118,7 @@ app.post('/update-time', (req, res) => {
   users[username] = {
     username,
     taskName: taskName || 'Unknown task',
+    isActive: req.body.isActive !== false,
     totalTime,
     lastSeen: Date.now(),
     // detect rank-up for confetti event
